@@ -1,1 +1,48 @@
 
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>마음이 쉬는 방</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,sans-serif;
+         margin:20px; line-height:1.5;}
+    h1{font-size:28px; margin:0 0 12px;}
+    .box{border:1px solid #ddd; border-radius:12px; padding:16px; max-width:720px;}
+    .btn{display:inline-block; padding:10px 14px; border-radius:10px; border:1px solid #ccc;
+         background:#f7f7f7; cursor:pointer; font-size:16px;}
+    .btn:hover{background:#eee;}
+    audio{width:100%; margin-top:12px;}
+    .hint{color:#555; font-size:14px; margin-top:10px;}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>마음이 쉬는 방</h1>
+
+    <button class="btn" onclick="document.getElementById('file').click()">MP3 선택</button>
+    <input id="file" type="file" accept="audio/*" style="display:none" />
+
+    <audio id="player" controls></audio>
+
+    <div class="hint">
+      ✅ 테스트용 페이지입니다. MP3를 선택하면 바로 재생됩니다.<br/>
+      다음 단계에서 “방 3개(플레이리스트)” 구조로 확장해드릴게요.
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('file');
+    const player = document.getElementById('player');
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      player.src = url;
+      player.play();
+    });
+  </script>
+</body>
+</html>
