@@ -5,29 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>마음이 쉬는 방</title>
   <style>
-    body{font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:24px; line-height:1.4}
-    h1{margin:0 0 14px}
-    .tabs{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 16px}
-    .tab{padding:10px 14px; border:1px solid #ccc; border-radius:10px; cursor:pointer; background:#f7f7f7}
-    .tab.active{background:#111; color:#fff; border-color:#111}
-    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:12px 0}
-    select, button{padding:10px 12px; border-radius:10px; border:1px solid #ccc; font-size:16px}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px;line-height:1.4}
+    h1{margin:0 0 12px}
+    .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 16px}
+    .tab{padding:10px 14px;border:1px solid #ccc;border-radius:12px;cursor:pointer;background:#f7f7f7}
+    .tab.active{background:#111;color:#fff;border-color:#111}
+    .box{border:1px solid #e1e1e1;border-radius:14px;padding:14px;max-width:760px;background:#fff}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+    select,button{padding:10px 12px;border-radius:12px;border:1px solid #ccc;font-size:16px}
     button{cursor:pointer}
-    .box{border:1px solid #e1e1e1; border-radius:14px; padding:14px; max-width:760px}
-    .hint{font-size:14px; color:#555; margin-top:8px}
-    audio{width:100%; margin-top:10px}
-    .small{font-size:13px; color:#777}
+    audio{width:100%;margin-top:10px}
+    .hint{font-size:14px;color:#555;margin-top:10px}
+    .small{font-size:13px;color:#777;margin:6px 0 0}
+    .warn{font-size:13px;color:#a33;margin-top:8px}
   </style>
 </head>
+
 <body>
   <h1>마음이 쉬는 방</h1>
-  <div class="small">방을 선택하면 목록이 뜨고, 재생 후 끝나면 다음 곡으로 자동 넘어갑니다.</div>
+  <div class="small">방을 선택하고 곡을 고른 뒤 재생하세요. 곡이 끝나면 자동으로 다음 곡으로 넘어갑니다.</div>
 
-  <div class="tabs">
-    <div class="tab active" data-room="cry">Cry</div>
-    <div class="tab" data-room="rest">Rest</div>
-    <div class="tab" data-room="angry">Angry</div>
-  </div>
+  <div class="tabs" id="tabs"></div>
 
   <div class="box">
     <div class="row">
@@ -39,112 +37,157 @@
 
     <div id="now" class="hint"></div>
     <audio id="player" controls preload="metadata"></audio>
-    <div class="hint" id="status"></div>
+    <div id="status" class="hint"></div>
+
+    <div class="warn" id="warn"></div>
   </div>
 
 <script>
 /**
- * ✅ 중요
- * 1) 아래 배열에 각 폴더의 mp3 파일명을 "정확히" 넣어야 합니다.
- * 2) 파일명이 한글/공백이면 가능은 하지만, 오류가 나기 쉬워서
- *    가능하면 영문/숫자/언더바 권장.
+ * ✅ 여기만 너 링크/곡명으로 채우면 됨
+ * - name: 목록에 보일 곡 제목(아무거나 가능)
+ * - url: 구글드라이브 직접다운로드 링크(uc?export=download&id=...)
  */
 const ROOMS = {
-  cry:   { title: "Cry",   files: [] },
-  rest:  { title: "Rest",  files: [] },
-  angry: { title: "Angry", files: [] },
+  cry: {
+    title: "Cry",
+    tracks: [
+      { name: "Cry 1", url: "https://drive.google.com/uc?export=download&id=1kc6QBKbcsn3tt82Qy8L3T8CKY3wtdxQ" },
+      // { name: "Cry 2", url: "여기에_링크" },
+    ]
+  },
+  rest: {
+    title: "Rest",
+    tracks: [
+      { name: "Rest 1", url: "https://drive.google.com/uc?export=download&id=15AEqFdIV1Hvu2mvaossl2fG-esZmfA2c" },
+    ]
+  },
+  angry: {
+    title: "Angry",
+    tracks: [
+      { name: "Angry 1", url: "https://drive.google.com/uc?export=download&id=10F3fvk18EBIIn6wY7Ie_z1f41BC2-rS2v" },
+    ]
+  }
 };
 
-// ✅ 여기만 채우면 끝 (예시 지우고 본인 파일명으로)
-// ROOMS.cry.files   = ["01.mp3","02.mp3"];
-// ROOMS.rest.files  = ["a.mp3","b.mp3"];
-// ROOMS.angry.files = ["x.mp3","y.mp3"];
-
-// ------------------- 동작 코드 -------------------
-let currentRoom = "cry";
+// ---------- 동작 코드 ----------
+let currentRoomKey = "cry";
 let currentIndex = 0;
 
-const player = document.getElementById("player");
-const select = document.getElementById("trackSelect");
-const nowEl = document.getElementById("now");
+const tabsEl   = document.getElementById("tabs");
+const selectEl = document.getElementById("trackSelect");
+const playBtn  = document.getElementById("playBtn");
+const nextBtn  = document.getElementById("nextBtn");
+const player   = document.getElementById("player");
+const nowEl    = document.getElementById("now");
 const statusEl = document.getElementById("status");
+const warnEl   = document.getElementById("warn");
 
-function buildSelect() {
-  select.innerHTML = "";
-  const list = ROOMS[currentRoom].files;
-  if (!list || list.length === 0) {
+function buildTabs(){
+  tabsEl.innerHTML = "";
+  Object.keys(ROOMS).forEach(key => {
+    const btn = document.createElement("button");
+    btn.className = "tab" + (key === currentRoomKey ? " active" : "");
+    btn.textContent = ROOMS[key].title;
+    btn.addEventListener("click", () => switchRoom(key));
+    tabsEl.appendChild(btn);
+  });
+}
+
+function fillSelect(){
+  const room = ROOMS[currentRoomKey];
+  selectEl.innerHTML = "";
+
+  room.tracks.forEach((t, idx) => {
     const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = "※ 이 방의 파일명이 아직 입력되지 않았습니다.";
-    select.appendChild(opt);
-    statusEl.textContent = "위 코드에서 ROOMS."+currentRoom+".files 배열에 mp3 파일명을 넣어주세요.";
-    player.removeAttribute("src");
+    opt.value = String(idx);
+    opt.textContent = t.name || `Track ${idx+1}`;
+    selectEl.appendChild(opt);
+  });
+
+  if (room.tracks.length === 0){
     nowEl.textContent = "";
+    statusEl.textContent = "이 방에는 곡이 없습니다. ROOMS에 트랙을 추가하세요.";
+    player.removeAttribute("src");
+    warnEl.textContent = "";
     return;
   }
-  list.forEach((f, idx) => {
-    const opt = document.createElement("option");
-    opt.value = idx;
-    opt.textContent = `${idx+1}. ${f}`;
-    select.appendChild(opt);
-  });
-  statusEl.textContent = "";
-  select.value = String(currentIndex);
-  loadCurrent(false);
+
+  // 현재 인덱스 보정
+  if (currentIndex < 0) currentIndex = 0;
+  if (currentIndex >= room.tracks.length) currentIndex = 0;
+
+  selectEl.value = String(currentIndex);
+  loadCurrentTrack(false);
 }
 
-function fileUrl(room, filename){
-  // GitHub Pages 주소 기준: /music-pages/폴더명/파일명
-  return `${location.origin}/music-pages/${room}/${encodeURIComponent(filename)}`;
+function switchRoom(key){
+  currentRoomKey = key;
+  currentIndex = 0;
+  buildTabs();
+  fillSelect();
 }
 
-function loadCurrent(autoplay=true){
-  const list = ROOMS[currentRoom].files;
-  if (!list || list.length === 0) return;
+function loadCurrentTrack(autoplay){
+  const room = ROOMS[currentRoomKey];
+  const track = room.tracks[currentIndex];
 
-  const filename = list[currentIndex];
-  const url = fileUrl(currentRoom, filename);
+  if (!track || !track.url){
+    statusEl.textContent = "트랙 URL이 비어있습니다. ROOMS를 확인하세요.";
+    return;
+  }
 
-  player.src = url;
-  nowEl.innerHTML = `<b>${ROOMS[currentRoom].title}</b> · ${filename}`;
-  if (autoplay) player.play().catch(()=>{});
+  player.src = track.url;
+  nowEl.textContent = `현재 방: ${room.title} / 현재 곡: ${track.name || (currentIndex+1)}`;
+  statusEl.textContent = autoplay ? "로딩 후 자동 재생합니다..." : "재생 버튼을 누르세요.";
+  warnEl.textContent = "";
+
+  if (autoplay){
+    player.play().catch(() => {
+      // 브라우저 자동재생 제한
+      statusEl.textContent = "자동재생이 막혔습니다. 재생 버튼을 한 번 눌러주세요.";
+    });
+  }
+}
+
+function playSelected(){
+  const idx = parseInt(selectEl.value, 10);
+  if (!Number.isNaN(idx)) currentIndex = idx;
+  loadCurrentTrack(true);
 }
 
 function nextTrack(){
-  const list = ROOMS[currentRoom].files;
-  if (!list || list.length === 0) return;
+  const room = ROOMS[currentRoomKey];
+  if (!room.tracks.length) return;
 
-  currentIndex = (currentIndex + 1) % list.length;
-  select.value = String(currentIndex);
-  loadCurrent(true);
+  currentIndex = (currentIndex + 1) % room.tracks.length;
+  selectEl.value = String(currentIndex);
+  loadCurrentTrack(true);
 }
 
-document.getElementById("playBtn").addEventListener("click", () => {
-  if (!player.src) loadCurrent(true);
-  else player.play().catch(()=>{});
+// 이벤트
+selectEl.addEventListener("change", () => {
+  const idx = parseInt(selectEl.value, 10);
+  if (!Number.isNaN(idx)) currentIndex = idx;
+  loadCurrentTrack(false);
 });
 
-document.getElementById("nextBtn").addEventListener("click", nextTrack);
+playBtn.addEventListener("click", playSelected);
+nextBtn.addEventListener("click", nextTrack);
 
-select.addEventListener("change", () => {
-  currentIndex = Number(select.value || 0);
-  loadCurrent(true);
-});
-
+// 곡 끝나면 자동 다음곡
 player.addEventListener("ended", nextTrack);
 
-document.querySelectorAll(".tab").forEach(t => {
-  t.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-    t.classList.add("active");
-    currentRoom = t.dataset.room;
-    currentIndex = 0;
-    buildSelect();
-  });
+// 에러 표시(권한/링크 문제)
+player.addEventListener("error", () => {
+  warnEl.textContent =
+    "재생 오류: (1) 드라이브 공유가 '링크가 있는 모든 사용자' 인지, " +
+    "(2) 링크가 uc?export=download&id=... 형식인지 확인하세요.";
 });
 
-// 초기
-buildSelect();
+// 시작
+buildTabs();
+fillSelect();
 </script>
 </body>
 </html>
